@@ -1,0 +1,113 @@
+{
+  "project_info": {
+    "project_number": "80871064746",
+    "project_id": "motoride-99248",
+    "storage_bucket": "motoride-99248.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:80871064746:android:ca2e11ceb85607f3223cd3",
+        "android_client_info": {
+          "package_name": "com.GammaSoft.socio_viajero"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "80871064746-6pjatu5fva7mk6uu9hdogs1ltf3dgmkt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.GammaSoft.socio_viajero",
+            "certificate_hash": "6b226cdc528dae5d76c981fa5b42d0aebf220cdc"
+          }
+        },
+        {
+          "client_id": "80871064746-ignqivtv585ejio8d5cvf1nmalv9fk8n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.GammaSoft.socio_viajero",
+            "certificate_hash": "b92f514479ef5a497170ca478f3a2d48af201c2c"
+          }
+        },
+        {
+          "client_id": "80871064746-8bd436gp11v020hmrtfjo5dn4vtabvki.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrGdQda2a6AQWRvEV3rCJrTNsxzyXrovw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "80871064746-8bd436gp11v020hmrtfjo5dn4vtabvki.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:80871064746:android:5d3628c1c2db4db8223cd3",
+        "android_client_info": {
+          "package_name": "com.example.conductor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "80871064746-8bd436gp11v020hmrtfjo5dn4vtabvki.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrGdQda2a6AQWRvEV3rCJrTNsxzyXrovw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "80871064746-8bd436gp11v020hmrtfjo5dn4vtabvki.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:80871064746:android:ab255a582b9d989a223cd3",
+        "android_client_info": {
+          "package_name": "com.example.socio_conductor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "80871064746-8bd436gp11v020hmrtfjo5dn4vtabvki.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrGdQda2a6AQWRvEV3rCJrTNsxzyXrovw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "80871064746-8bd436gp11v020hmrtfjo5dn4vtabvki.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
