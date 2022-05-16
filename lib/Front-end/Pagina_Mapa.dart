@@ -1,15 +1,13 @@
 // ignore_for_file: prefer_const_constructors, prefer_final_fields, unrelated_type_equality_checks, prefer_conditional_assignment, non_constant_identifier_names, prefer_const_literals_to_create_immutables, unnecessary_string_interpolations
 import 'dart:async';
-import 'dart:math';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connection_verify/connection_verify.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
-import 'package:google_maps_webservice/directions.dart';
 import 'package:socio_conductor/Back-end/BD.dart';
-import 'package:socio_conductor/Back-end/Direcciones.dart';
+import 'package:socio_conductor/Back-end/Ciudades.dart';
 import 'package:socio_conductor/Back-end/Funciones.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Mi_Perfil_M.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Perfil_conductor_M.dart';
@@ -62,10 +60,11 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
   bool _activa_tombola = false;
   bool _pantalla_tombola = false;
   bool _terminando_viaje = false;
-  int _asientos_libres = 1;
+  int _asientos_libres1 = 1, _asientos_libres2;
   int _actualiz = 0;
   int _pantalla = 1;
   Reg_viaje _miViaje;
+  String _path1, _path2;
 
   /////////////////
   Set<maps.Polyline> _ruta = Set();
@@ -148,6 +147,8 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
           ),
           _pantalla_fin_de_viaje(),
           _f.pantalla_carga_espera(_terminando_viaje, s),
+          _avisoFueraDeZona(),
+          _avisoGPSApagado()
         ],
       ),
     );
@@ -1128,60 +1129,20 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
   }
 
   void _inicializar() async {
+    s = MediaQuery.of(context).size;
+
+    _path1 = Ciudades(4000).carpeta(widget._pos);
+    _revisar_asientos_libres();
+
     //activa el listener de solicitudes de acuerdo a la cantidad de pasajeros en los viajes
     if (!_escuchandoViajes) {
       _escuchandoViajes = true;
       _escuchar_solicitudes();
     }
 
-    //Reglas para apagar o encender el listener de solicitudes cuando no haya asientos libres o
-    //reactivarlo si hay asientos libres
-    if (_asientos_libres == 0 &&
-        _listener_solicitudes != null &&
-        !_listener_solicitudes.isPaused) {
-      _listener_solicitudes.pause();
-    } else if (_asientos_libres > 0 &&
-        _listener_solicitudes != null &&
-        _listener_solicitudes.isPaused) {
-      _listener_solicitudes.resume();
-    }
-
-    //crea un viaje en caso de que el viaje recibido sea nulo y no generar errores en ejecucion
-    if (_miViaje == null) {
-      _miViaje = _f.crear_un_viage(_misDatos, widget._pos);
-    } else if (_primera_revision) {
+    if (_primera_revision) {
       _primera_revision = false;
-      //si el viaje existe y es la primera revision al abrir la app revisa que no haya viajes cancelados pendientes
-      if (_miViaje.estado_viaje1 == 4) {
-        _viaje_cancelado_cliente(1).then((value) {
-          try {
-            setState(() {});
-          } catch (e) {}
-        });
-      }
-
-      if (_miViaje.estado_viaje2 == 4) {
-        _viaje_cancelado_cliente(2).then((value) {
-          try {
-            setState(() {});
-          } catch (e) {}
-        });
-      }
-
-      if (_miViaje.estado_viaje3 == 4) {
-        _viaje_cancelado_cliente(3).then((value) {
-          try {
-            setState(() {});
-          } catch (e) {}
-        });
-      }
-    }
-    _primera_revision = false;
-
-    //crea la variale de dimension
-    if (s == null) {
-      s = MediaQuery.of(context).size;
-      _revisar_asientos_libres();
+      _revisarViajesCandeladosAlIniciar();
     }
 
     //si el marcador de mi ubicacion esta vacio activamos la funcion para escuchar ubicacion
@@ -1231,24 +1192,48 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     }
   }
 
-  Future<void> _posicion_camara(Position _position, double _zoom) async {
+  Future<void> _posicion_camara(double _zoom) async {
     //recibe una posicion y la distancia de altura, actualiza la camara del mapa
-    if (_position == null || _zoom == null || _zoom < 0) return;
+    if (widget._pos == null || _zoom == null || _zoom < 0) return;
     await _controlador.animateCamera(
       maps.CameraUpdate.newCameraPosition(
         maps.CameraPosition(
             target: maps.LatLng(
-              _position.latitude,
-              _position.longitude,
+              widget._pos.latitude,
+              widget._pos.longitude,
             ),
             zoom: _zoom,
             tilt: 45,
-            bearing: _position.heading),
+            bearing: widget._pos.heading),
       ),
     );
   }
 
+  void _revisarViajesCandeladosAlIniciar() async {
+    if (_miViaje.estado_viaje1 == 4) {
+      await _viaje_cancelado_cliente(1);
+    }
+
+    if (_miViaje.estado_viaje2 == 4) {
+      await _viaje_cancelado_cliente(2);
+    }
+
+    if (_miViaje.estado_viaje3 == 4) {
+      await _viaje_cancelado_cliente(3);
+    }
+
+    try {
+      setState(() {});
+    } catch (e) {
+      print(
+          "ERROR AL REFRESCAR PANTALLA DESPUES DE LA CANCELACION INICIAL DE VIAJES");
+    }
+
+    return;
+  }
+
   Future<void> _actualizar_mi_marcador(Position _pos) async {
+    ///Recibe la nueva ubicación
     if (_miUbicacion == null ||
         GeolocatorPlatform.instance.distanceBetween(_miViaje.lat_chofer,
                 _miViaje.lon_chofer, _pos.latitude, _pos.longitude) >
@@ -1949,6 +1934,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
 
   void _escuchar_posicion() async {
     //nos aseguramoe de tner los permisos
+
     while (!_permisos_gps_habilitaados) {
       var _respuesta = await GeolocatorPlatform.instance.requestPermission();
       if (_respuesta == LocationPermission.whileInUse ||
@@ -1961,25 +1947,16 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       return;
     }
 
-    if (_listenerGPS != null && !_listenerGPS.isPaused) {
-      _listenerGPS.resume();
-      return;
-    }
-
-    if (_listenerGPS != null) {
-      _listenerGPS.cancel();
-      _listenerGPS = null;
-    }
-
     final LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 100,
+      distanceFilter: 5,
     );
 
     _listenerGPS =
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
             (_evento) async {
       if (_evento != null) {
+        widget._pos = _evento;
         await _centrar_viaje();
         await _actualizar_mi_marcador(_evento);
         widget._pos = _evento;
@@ -2028,8 +2005,9 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
   }
 
   Future<void> _trazar_ruta() async {
-    _ruta = null;
-    _ruta = Set();
+    ///1esta funcion vuelve a clacular el pilyline de acuerdo a los
+    ///paramétros del viaje
+    _ruta.clear();
     if (_destino1 == null && _destino2 == null && _destino3 == null) return;
     List<maps.LatLng> _puntos = [];
 
@@ -2147,19 +2125,26 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
 
   Future<void> _centrar_viaje() async {
     if (_destino1 == null && _destino2 == null && _destino3 == null) {
-      await _posicion_camara(widget._pos, 17);
+      ///si no hay viajeros en el auto o solicitando viaje, se centra la cámara en la
+      ///posicion de condductor
+      await _posicion_camara(17);
       return;
     }
+
+    ///el siguiente bloque solo se ejecuta si hay una solicitud aceptada o viaje activo
+    ///Trazamos la ruta sugerida par ael conductor
     await _trazar_ruta();
+
     //Creamos 4 delimitantes que marcan la zona donde rehubicaremos la camara
 
     //con esos datos creamos un objetos LatLngBounds para pasarlo al controlador de la camara
 
-    //pasamos las variables a un objeto tipo cameraUpdate
+    //Si el conductor activó la vista centrada en su auto
     if (_vista_alta) {
-      await _posicion_camara(widget._pos, 19);
+      await _posicion_camara(17);
       return;
     } else {
+      ///si esta activa la vista que abaraca todos los ciajeros
       num _izquierda = _izquierda_f();
       if (_izquierda == null) return;
       num _derecha = _derecha_f();
@@ -2190,13 +2175,6 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     }
   }
 
-/*_posicion_camara(widget._pos, 17);
-    try {
-      await _controlador.animateCamera(
-          maps.CameraUpdate.newLatLngBounds(_bounds, _distancia));
-    } catch (e) {
-      await _f.dialogo("", "$e", context);
-    } */
   num _izquierda_f() {
     ///esta funcion devuelve el valor mas pequeño del cuadrante izquierdo de todas las latitudes de los marcadores diponibles
     List<num> _latitudes = [];
@@ -2309,25 +2287,37 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     return _minimo;
   }
 
-  Future<void> _listener_de_solicitudes() async {
-    if (_listener_solicitudes != null) {
-      if (!_listener_solicitudes.isPaused) {
-        _listener_solicitudes.pause();
-      }
-      await _listener_solicitudes.cancel();
-      _listener_solicitudes = null;
-    }
+  Future<void> _crear_listener_de_solicitudes() async {
+    ///Antes de invocar esta funcion es muy importante que el listener de solicitudes sea nulo
+    ///primero hacermos el el path actual y el anterior sean el mismo, no hay que igualar una a otra o haran
+    ///referencia a la misma variable, hay que asignarles yn valor desde instancias diferentes
+    _path1 = Ciudades(4000).carpeta(widget._pos);
+    _path2 = Ciudades(4000).carpeta(widget._pos);
 
+    ///La variable asientos_libres1 se actualiza dentro de la función, asi que solo asignamos el valir retornado
+    _asientos_libres2 = _revisar_asientos_libres();
+
+    print("se renovó el listener de solicitudes");
+
+    ///instanciamos el linestener de solicitudes
     _listener_solicitudes = FirebaseFirestore.instance
-        .collection("Manzanillo")
+        .collection(_path1)
         .snapshots()
         .listen((_event) {
-      print("_escuchar_solicitudes() nuevo cambio en el streamsubscroiption");
-      _solicitudes = [];
+      print("se detecto un evento ${_event.docs.length}");
+
+      ///cada que hay un cambio limpiamos la lista de solicitudes
+      _solicitudes.clear();
+
+      ///Revisamos todos los documentos de la instantanea
       if (_event.docs.isNotEmpty) {
+        ///Si una solicitud no tiene el uid del chofer, significa que no ha sido aceptada
+        ///también debemos verificar que las solicitudes que mostremos coincidan con los
+        ///asientos libres diponibles actuales
         _event.docs.forEach((element) {
           if (element.data()["uid_chofer"] == null &&
-              element.data()["num_pasajeros"] < (_asientos_libres + 1)) {
+              element.data()["num_pasajeros"] < (_asientos_libres1 + 1)) {
+            ///si todas las condiciones se cumplen agregamos la solicitud a la lista
             Reg_solicitud_viaje _v =
                 Reg_solicitud_viaje.fromJson(element.data());
             _v.id = element.id;
@@ -2335,33 +2325,53 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
           }
         });
       }
+
+      ///refrescamos la pantalla
       setState(() {});
     });
   }
 
   Future<void> _escuchar_solicitudes() async {
-    try {
-      final _res =
-          await FirebaseFirestore.instance.collection("Manzanillo").get();
-      _res.docs.forEach((element) {
-        if (element.data()["uid_chofer"] == null &&
-            element.data()["num_pasajeros"] <= _asientos_libres) {
-          var _v = Reg_solicitud_viaje.fromJson(element.data());
-          _v.id = element.id;
-          _solicitudes.add(_v);
-        }
-      });
-    } catch (e) {
-      await _f.dialogo("error", "error al obtrner los viajes", context);
+    ///verificar si se esta dentro de una zona con servicio
+    if (_path1 == "") {
+      if (_listener_solicitudes != null) {
+        _listener_solicitudes.cancel();
+        _listener_solicitudes = null;
+      }
+      return;
     }
 
-    await _listener_de_solicitudes();
+    ///verificar si hay asientos libres
+    if (_asientos_libres1 == 0) {
+      if (_listener_solicitudes != null) {
+        _listener_solicitudes.cancel();
+        _listener_solicitudes = null;
+      }
+      return;
+    }
+
+    ///verificar si el path actual es iguaal al anterior
+    if (_path1 == _path2) {
+      ///si es el mismo, ahora verificar que los asientos diisponibles son iguales
+      ///que en el ultimo refresco de pantalla, tambien se verifica que el listener este
+      ///activo
+      if (_asientos_libres1 == _asientos_libres2 &&
+          _listener_solicitudes != null) {
+        return;
+      }
+    }
+
+    if (_listener_solicitudes != null) {
+      _listener_solicitudes.cancel();
+      _listener_solicitudes = null;
+    }
+
+    await _crear_listener_de_solicitudes();
     return;
   }
 
   int _revisar_asientos_libres() {
     ///Revisa las solicitudes aceptadas y revisa la cantidad de pasajeros de cada una, devuelve la cantidad de asientos libres
-    ///si hay irregularidades o errores en alguna de las solicitudes  se avisa al conductor de la irregularidad.
     ///
     int _viajando = 0;
     if (_miViaje.uid_v1 != null && _miViaje.uid_v1 != "") {
@@ -2375,11 +2385,11 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     }
 
     if (_viajando >= 3) {
-      _asientos_libres = 0;
+      _asientos_libres1 = 0;
       return 0;
     }
 
-    _asientos_libres = 3 - _viajando;
+    _asientos_libres1 = 3 - _viajando;
     return (3 - _viajando);
   }
 
@@ -2416,7 +2426,9 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
   }
 
   Future<void> _viaje_cancelado_cliente(int _num) async {
+    String _nombreViajero = "";
     if (_num == 1) {
+      _nombreViajero = _miViaje.nombre_v1;
       if (_f.compararFechaConHoy_minutos(_miViaje.fecha1) > 6) {
         if (!await BD.bd.agregar_cargo_a_viajero(
             _miViaje.uid_v1, widget._tarifas.penalizacion, 0)) {
@@ -2433,6 +2445,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       var _v = _f.eliminar_un_viajero(1, _miViaje);
       if (_v != null) _miViaje = _v;
     } else if (_num == 2) {
+      _nombreViajero = _miViaje.nombre_v2;
       if (_f.compararFechaConHoy_minutos(_miViaje.fecha2) > 6) {
         if (!await BD.bd.agregar_cargo_a_viajero(
             _miViaje.uid_v2, widget._tarifas.penalizacion, 0)) {
@@ -2450,6 +2463,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       if (_v != null) _miViaje = _v;
     }
     if (_num == 3) {
+      _nombreViajero = _miViaje.nombre_v3;
       if (_f.compararFechaConHoy_minutos(_miViaje.fecha3) > 6) {
         if (!await BD.bd.agregar_cargo_a_viajero(
             _miViaje.uid_v3, widget._tarifas.penalizacion, 0)) {
@@ -2471,8 +2485,10 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       await _f.dialogo("error", "al actualizar un vaije cancelado", context);
     }
 
-    await _f.dialogo("VIAJE CANCELADO",
-        "La solicitud $_num  de viaje fue cancelada por el usuario.", context);
+    await _f.dialogo(
+        "VIAJE CANCELADO",
+        "La solicitud $_num  de viaje, a nombre de $_nombreViajero fue cancelada por el usuario.",
+        context);
 
     await _actualizar_marcadores();
     await _trazar_ruta();
@@ -2556,6 +2572,146 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
         ),
       );
     }
+  }
+
+  Widget _avisoFueraDeZona() {
+    if (_path1 != "" || widget._pos == null) {
+      return _f.invisible();
+    }
+
+    return SizedBox(
+      width: s.width,
+      height: s.height,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: s.width,
+            decoration: BoxDecoration(
+                color: Colors.white,
+                gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white70,
+                      Colors.white60,
+                      Colors.white54,
+                      Colors.white38,
+                      Colors.white30,
+                      Colors.white24,
+                      Colors.white12,
+                      Colors.white10,
+                    ])),
+            padding: EdgeInsets.fromLTRB(
+                s.width * .05, s.height * .025, s.width * .05, s.height * .1),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "USTED ESTA FUERA DE LA ZONA DE COVERTURA DE SERVICIO",
+                  style: TextStyle(
+                      color: Color.fromARGB(255, 168, 13, 2),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18),
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  "En esta zona no recibirá solicitudes de socios viajeros",
+                  style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w300,
+                      fontSize: 18),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: _f.invisible()),
+        ],
+      ),
+    );
+  }
+
+  Widget _avisoGPSApagado() {
+    if (!_gps_habilitado) {
+      return _f.invisible();
+    }
+
+    return SizedBox(
+      width: s.width,
+      height: s.height,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: s.width,
+            decoration: BoxDecoration(
+                color: Colors.white,
+                gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white,
+                      Colors.white70,
+                      Colors.white60,
+                      Colors.white54,
+                      Colors.white38,
+                      Colors.white30,
+                      Colors.white24,
+                      Colors.white12,
+                      Colors.white10,
+                    ])),
+            padding: EdgeInsets.fromLTRB(
+                s.width * .05, s.height * .025, s.width * .05, s.height * .1),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "SIN SERVICIO DE UBICACIÓN",
+                  style: TextStyle(
+                      color: Color.fromARGB(255, 168, 13, 2),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 22),
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  "Su GPS esta apagado o no contamos con los permisos para obtener su ubicación ",
+                  style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w300,
+                      fontSize: 20),
+                  textAlign: TextAlign.center,
+                ),
+                Image.asset(
+                  "assets/logos/globo.gif",
+                  width: s.width * .35,
+                )
+              ],
+            ),
+          ),
+          Expanded(child: _f.invisible()),
+        ],
+      ),
+    );
   }
 }
 

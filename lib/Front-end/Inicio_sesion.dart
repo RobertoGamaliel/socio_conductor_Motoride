@@ -1,7 +1,5 @@
 // ignore_for_file: prefer_const_constructors
 
-import 'dart:math';
-import 'package:animate_do/animate_do.dart';
 import 'package:connection_verify/connection_verify.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import 'package:socio_conductor/Back-end/Funciones.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Perfil_conductor_M.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Reg_viaje.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Tarifas_M.dart';
-import 'package:socio_conductor/Front-end/Animacion_tombola.dart';
 import 'package:socio_conductor/Front-end/PaginaAdministrador.dart';
 import 'package:socio_conductor/Front-end/Pagina_Mapa.dart';
 
@@ -167,20 +164,6 @@ class _Inicio_de_sesionState extends State<Inicio_de_sesion> {
                     child: InkWell(
                       splashColor: Colors.yellow,
                       highlightColor: Colors.green,
-                      /*onLongPress: () async {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (BuildContext context) =>
-                                    Animacion_tombola())).then((value) async {
-                          if (value != null) {
-                            await _f.dialogo(
-                                "RESULTADO",
-                                "el resultado de la tombola es ${value == 1 ? 'GRATIS' : value == 2 ? '50% de descuento' : '\$10 pesos'}",
-                                context);
-                          }
-                        });
-                      },*/
                       onTap: () async {
                         FocusScope.of(context).requestFocus(FocusNode());
                         //Evaluar que el e-mail tenga el formato correcto y que ademas dea de gmail
@@ -207,10 +190,6 @@ class _Inicio_de_sesionState extends State<Inicio_de_sesion> {
                         //descargar ubicacion
                         Position _pos = await permisos_ubicacion(context);
                         if (_pos == null) {
-                          await _f.dialogo(
-                              "SIN PERMISOS DE UBICACIÓN",
-                              "Se necesita acceder a su ubicación para poder iniciar el servicio MotoRide",
-                              context);
                           //se activa la pantalla de carga
                           setState(() {
                             _cargando = false;
@@ -250,7 +229,7 @@ class _Inicio_de_sesionState extends State<Inicio_de_sesion> {
                         }
 
                         Tarifas_M _tarifas;
-                        if ((_tarifas = await BD.bd.obtener_tarifas()) ==
+                        if ((_tarifas = await BD.bd.obtener_tarifas(context)) ==
                             null) {
                           await _f.dialogo(
                               "ERROR",
@@ -266,10 +245,6 @@ class _Inicio_de_sesionState extends State<Inicio_de_sesion> {
                             .recueperar_viaje(_misDatos, _pos, context);
 
                         if (_miViaje == null) {
-                          await _f.dialogo(
-                              "ERROR",
-                              "Hubo un problema al obtener el viaje actual, por favor inténtelo nuevamente.",
-                              context);
                           setState(() {
                             _cargando = false;
                           });
@@ -336,22 +311,110 @@ class _Inicio_de_sesionState extends State<Inicio_de_sesion> {
     final _geo = GeolocatorPlatform.instance;
 
     if (!await _geo.isLocationServiceEnabled()) {
+      ///verificamos si el gps esta encendido
+      Widget _contenido = Container(
+          child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            "GPS APAGADO\n",
+            style: TextStyle(
+                color: Colors.blue[900],
+                fontWeight: FontWeight.w600,
+                fontSize: 24),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            "El GPS del dispositivo esta apagado, enciéndalo y vuelva a intentarlo\n",
+            style: TextStyle(
+                color: Colors.black, fontWeight: FontWeight.w300, fontSize: 20),
+            textAlign: TextAlign.center,
+          ),
+          Image.asset("assets/logos/mundo.gif", width: s.width * .3)
+        ],
+      ));
+      await _f.dialogoWidget(_contenido, context);
       return null;
     }
 
     var _permisos = await _geo.checkPermission();
-    if (_permisos == LocationPermission.denied) {
+    //verificamos si tenemos permisos para obtener la ubicación
+
+    if (_permisos == LocationPermission.denied ||
+        _permisos == LocationPermission.unableToDetermine) {
       _permisos = await Geolocator.requestPermission();
-      if (_permisos == LocationPermission.denied) {
+      if (_permisos != LocationPermission.always &&
+          _permisos != LocationPermission.whileInUse) {
+        Widget _contenido = Container(
+            child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              "SIN ACCESO A SU UBICACIÓN\n",
+              style: TextStyle(
+                  color: Colors.blue[900],
+                  fontWeight: FontWeight.w600,
+                  fontSize: 24),
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              "Para poder continuar es necesario conocer su ubicación, vuelva intentar iniciar sesión y acepte la solicitud para acceder a la ubicación.\n",
+              style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w300,
+                  fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            Image.asset("assets/logos/mundo.gif", width: s.width * .3)
+          ],
+        ));
+        await _f.dialogoWidget(_contenido, context);
         return null;
       }
     }
 
     if (_permisos == LocationPermission.deniedForever) {
+      Widget _contenido = Container(
+          child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            "ACCESO A LA UBICACIÓN BLOQUEADO\n",
+            style: TextStyle(
+                color: Colors.blue[900],
+                fontWeight: FontWeight.w600,
+                fontSize: 24),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            "Para poder continuar es necesario conocer su ubicación, Se abrirá el menú de permisos de ubicación.\n",
+            style: TextStyle(
+                color: Colors.black, fontWeight: FontWeight.w300, fontSize: 20),
+            textAlign: TextAlign.center,
+          ),
+          Image.asset("assets/logos/globo.gif", width: s.width * .3)
+        ],
+      ));
+      await _f.dialogoWidget(_contenido, context);
       await _geo.openAppSettings();
       return null;
     }
 
-    return await _geo.getCurrentPosition();
+    var _pos = await _geo.getCurrentPosition();
+    if (_pos == null) {
+      await _f.dialogo(
+          "Hubo un problema",
+          "No conseguimos obtener su ubicación, por favor espere unos segundos e inténtelo nuevamente.",
+          context);
+      return null;
+    }
+
+    return _pos;
   }
 }

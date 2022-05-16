@@ -290,22 +290,17 @@ class BD {
     /// d-2) Verificar que la ultima vez que se descargó el perfil a los sumo 1 hora
     /// Si alfuno de los casos anteriores no se cumple, se limpia la base de datos local y se camnia al valor
     /// de la variable _renovar_datos a verdadero
-    bool _renovar_datos = false;
 
     Perfil_conductor_M _misDatos = await _recuperar_perfil_local_interno();
-    if (_misDatos == null ||
-        _misDatos.uid != _aut.currentUser.uid ||
-        _misDatos.tipo_perfil != "G65I89#36.ñlo*Zgsfp960" ||
-        _misDatos.sesion == null ||
-        Funciones().compararFechaConHoy_minutos(_misDatos.sesion) > 60) {
-      await limipiar_perfil_local();
-      _renovar_datos = true;
-    }
-
-    ///3) si Renovar mis datos es falso, se retornan los datos locales
-    if (!_renovar_datos) {
+    if (_misDatos != null &&
+        _misDatos.uid == _aut.currentUser.uid &&
+        _misDatos.tipo_perfil == "G65I89#36.ñlo*Zgsfp960" &&
+        _misDatos.sesion != null &&
+        Funciones().compararFechaConHoy_minutos(_misDatos.sesion) < 60) {
       return _misDatos;
     }
+
+    await limipiar_perfil_local();
 
     ///4)	Si _renovar_datos es verdadero entonces se intenta obtener datos de firestore con el uid nuevo.
     ///Si no hay éxito retornar valor nulo y avisar de error.
@@ -357,8 +352,6 @@ class BD {
       _misDatos.sesion = DateTime.now().toString();
       return _misDatos;
     } catch (e) {
-      await Funciones()
-          .dialogo("ERROR", "${_aut.currentUser.uid}   $e ", context);
       await _aut.signOut();
 
       return null;
@@ -452,6 +445,7 @@ class BD {
   Future<Reg_viaje> recueperar_viaje(
       Perfil_conductor_M _misDatos, Position _gps, BuildContext context) async {
     if (!await ConnectionVerify.connectionStatus()) {
+      await _f.dialogo_sin_internet(context);
       return null;
     }
 
@@ -465,12 +459,9 @@ class BD {
       if (_resp.exists && _resp.data().isNotEmpty) {
         _viaje = Reg_viaje.fromJson(_resp.data());
       }
-    } catch (e) {
-      print("no hay un viaje activo");
-    }
-
+    } catch (e) {}
     //si ya hay un viaje devuelve ese viaje
-    if (_viaje != null && _viaje.placas != null) {
+    if (_viaje != null) {
       return _viaje;
     }
 
@@ -482,9 +473,6 @@ class BD {
           context);
       return null;
     }
-
-    print(
-        "recuperar viaje ${_viaje.uid_chofer == FirebaseAuth.instance.currentUser.uid}");
 
     return _viaje;
     //si no, entonces crea un viaje
@@ -760,14 +748,21 @@ class BD {
     ///veerifico que la ubicacion del chofer no sea nula
   }
 
-  Future<Tarifas_M> obtener_tarifas() async {
-    if (!await ConnectionVerify.connectionStatus()) return null;
+  Future<Tarifas_M> obtener_tarifas(BuildContext context) async {
+    if (!await ConnectionVerify.connectionStatus()) {
+      await _f.dialogo_sin_internet(context);
+      return null;
+    }
     Tarifas_M _tarifas;
     try {
       final _res =
           await FirebaseFirestore.instance.collection("tarifas").doc("1").get();
       _tarifas = Tarifas_M.fromJson(_res.data());
     } catch (e) {
+      await _f.dialogo(
+          "HUBO UN PROBELMA",
+          "Tuvimos un problema al obtener la información necesaria para iniciar el viaje.",
+          context);
       return null;
     }
 
@@ -792,6 +787,7 @@ class BD {
 
     _perfil.pago_adeudo += _cargo;
     _perfil.id_conductor = null;
+    _perfil.raites += _raite;
 
     try {
       await FirebaseFirestore.instance
