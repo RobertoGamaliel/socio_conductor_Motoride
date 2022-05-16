@@ -9,6 +9,7 @@ import 'package:socio_conductor/Back-end/Funciones.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Perfil_conductor_M.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Reg_viaje.dart';
 import 'package:socio_conductor/Back-end/Modelos_base_datos/Tarifas_M.dart';
+import 'package:socio_conductor/Front-end/CambioContrasena.dart';
 import 'package:socio_conductor/Front-end/PaginaAdministrador.dart';
 import 'package:socio_conductor/Front-end/Pagina_Mapa.dart';
 
@@ -215,6 +216,15 @@ class _Inicio_de_sesionState extends State<Inicio_de_sesion> {
                           });
                           return;
                         }
+
+                        /*if (_cs == "nuevoconductor") {
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (BuildContext context) =>
+                                      CambioContrasena(_cs, _mail)));
+                          return;
+                        }*/
 
                         if (FirebaseAuth.instance.currentUser.uid ==
                                 "e27A4oWLRiWVdnilrxC2LWKcSrI2" ||

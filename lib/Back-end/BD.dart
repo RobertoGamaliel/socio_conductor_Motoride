@@ -571,6 +571,7 @@ class BD {
       Reg_solicitud_viaje _solicitud,
       Reg_viaje _viaje,
       Perfil_conductor_M _misDatos,
+      String _path,
       BuildContext context) async {
     //comprobacion de conecxion
     if (!await ConnectionVerify.connectionStatus()) {
@@ -580,14 +581,22 @@ class BD {
 
     //autenticacion
     if (!await _autenticar(_misDatos)) return false;
+
+    ///Verificación del path
+    if (_path == null || _path == "") return false;
+
+    ///Agregamos el uid del chofer a la solicitud
     _solicitud.uid_chofer = _misDatos.uid;
+
+    ///intentar subir la solicitud actualizada
     try {
       await FirebaseFirestore.instance
-          .collection("Manzanillo")
+          .collection(_path)
           .doc(_solicitud.id)
           .update(_solicitud.toJson());
     } catch (e) {
-      print("error al aceptar la solicitud de viaje en firestore $e");
+      print(
+          "error al aceptar la solicitud de viaje en firestore ${_solicitud.uid_chofer}  ${_solicitud.uid_viajero}$e");
       return false;
     }
 

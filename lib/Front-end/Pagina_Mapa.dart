@@ -61,7 +61,6 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
   bool _pantalla_tombola = false;
   bool _terminando_viaje = false;
   int _asientos_libres1 = 1, _asientos_libres2;
-  int _actualiz = 0;
   int _pantalla = 1;
   Reg_viaje _miViaje;
   String _path1, _path2;
@@ -993,6 +992,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                             if (_v != null) {
                               _miViaje = _v;
                               _revisar_asientos_libres();
+                              await _crear_listener_de_solicitudes();
                             }
                             _ruta = null;
                             _ruta = Set();
@@ -1045,6 +1045,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                               if (_v != null) {
                                 _miViaje = _v;
                                 _revisar_asientos_libres();
+                                await _crear_listener_de_solicitudes();
                               }
                               _ruta = null;
                               _ruta = Set();
@@ -1054,6 +1055,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                               _pantalla_pago = false;
                               _resultados = null;
                               _terminando_viaje = false;
+
                               setState(() {});
                             },
                             child: Text("NO PAGADO"),
@@ -1130,8 +1132,13 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
 
   void _inicializar() async {
     s = MediaQuery.of(context).size;
+    //crea los iconos que se usaran para los marcadores del mapa
+    _crearIconosMarcadores();
+
+    _escuchar_posicion();
 
     _path1 = Ciudades(4000).carpeta(widget._pos);
+
     _revisar_asientos_libres();
 
     //activa el listener de solicitudes de acuerdo a la cantidad de pasajeros en los viajes
@@ -1144,17 +1151,11 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       _primera_revision = false;
       _revisarViajesCandeladosAlIniciar();
     }
-
-    //si el marcador de mi ubicacion esta vacio activamos la funcion para escuchar ubicacion
-    if (_miUbicacion == null) {
-      _escuchar_posicion();
-    }
-
     _miViaje.lat_chofer = widget._pos.latitude;
     _miViaje.lon_chofer = widget._pos.longitude;
-    _actualiz++;
+  }
 
-    //crea los iconos que se usaran para los marcadores del mapa
+  Future<void> _crearIconosMarcadores() async {
     if (_icono_auto == null) {
       _icono_auto = await maps.BitmapDescriptor.fromAssetImage(
           ImageConfiguration(size: s, devicePixelRatio: 0.5),
@@ -1267,7 +1268,6 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       _miViaje.lon_chofer = _pos.longitude;
 
       //variable de control para llevar las actualizaciones del mapa
-      _actualiz++;
 
       //revisa si aun hay viajes donde el usuario esta esperando al conductor, si los hay, revisa si esta ya muy
       //cerca de alguno para cambiar su estado, lo que avisara al usuario que el chofer llego a la vez que al chofer
@@ -1783,7 +1783,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                         style: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.w500,
-                            fontSize: 14),
+                            fontSize: 12),
                         textAlign: TextAlign.center,
                       ),
                       onPressed: () async {
@@ -1814,7 +1814,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w500,
-                          fontSize: 14),
+                          fontSize: 12),
                       textAlign: TextAlign.center,
                     ),
                     onPressed: () async {
@@ -1823,7 +1823,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                       _viaje_actualizado = _f.agregar_un_viajero(
                           _solicitudes[index], _viaje_actualizado);
 
-                      //gurdamosuna copi de la solicitud para el paso posterior
+                      //gurdamosuna copia de la solicitud para el paso posterior
                       Reg_solicitud_viaje _solicitud = _solicitudes[index];
 
                       //intentamos responder a la solicitud usando el viaje actualizzado
@@ -1831,6 +1831,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                           _solicitudes[index],
                           _viaje_actualizado,
                           _misDatos,
+                          _path1,
                           context)) {
                         return;
                       }
@@ -1844,7 +1845,6 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                         _solicitudes.removeWhere((element) =>
                             element.uid_viajero == _solicitud.uid_viajero);
                       }
-
                       //revisamos si ya no hay asientos libres para detener el streamer de solicitudes y no consumir conexiones
                       if (_revisar_asientos_libres() == 0) {
                         _listener_solicitudes.pause();
@@ -1854,6 +1854,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
                       //Actualizamos los marcadores y la camara, depues refrescamos la pantalla
 
                       await _actualizar_marcadores();
+                      _actualizar_mi_marcador(widget._pos);
                       await _centrar_viaje();
                       setState(() {});
                     }),
@@ -1947,6 +1948,11 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       return;
     }
 
+    if (_listenerGPS != null && _listenerGPS.isPaused) {
+      _listenerGPS.resume();
+      return;
+    }
+
     final LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 5,
@@ -1959,49 +1965,16 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
         widget._pos = _evento;
         await _centrar_viaje();
         await _actualizar_mi_marcador(_evento);
-        widget._pos = _evento;
         _permisos_gps_habilitaados = true;
       } else {
         _permisos_gps_habilitaados = false;
       }
       setState(() {});
     }, onError: (e) async {
-      await _listenerGPS.cancel();
-      _listenerGPS = null;
-      setState(() {});
+      print("Hubo un error con el GPS $e");
     }, onDone: () async {
-      await _listenerGPS.cancel();
-      _listenerGPS = null;
-      setState(() {});
+      print("El GPS terminó correctamente");
     });
-
-    /*try {
-      Position _pos = await GeolocatorPlatform.instance.getCurrentPosition(
-          locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high, distanceFilter: 10));
-      if (_pos != null) {
-        _actualizar_mi_marcador(_pos);
-        _permisos_gps_habilitaados = true;
-      } else {
-        GeolocatorPlatform.instance.requestPermission();
-      }
-    } catch (e) {
-      //si ocurre algun error es porque la ubicacion es nula, asi que pedimos permisos
-      GeolocatorPlatform.instance.requestPermission();
-    }
-    while (_permisos_gps_habilitaados) {
-      await Future.delayed(Duration(seconds: 2));
-      try {
-        Position _pos = await GeolocatorPlatform.instance.getCurrentPosition(
-            locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high, distanceFilter: 2));
-        widget._pos = _pos;
-
-        await _actualizar_mi_marcador(_pos);
-      } catch (e) {
-        GeolocatorPlatform.instance.requestPermission();
-      }
-    }*/
   }
 
   Future<void> _trazar_ruta() async {
@@ -2084,49 +2057,13 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
       color: Colors.green[900],
       width: 3,
     ));
-/*
-    if (_puntos.isNotEmpty && _puntos.length > 1) {
-      final _r1 =
-          await Direcciones().ruta(_miUbicacion.position, _puntos[0], context);
-      _f.dialogo("r", "rta", context);
-      if (_r1 != null) {
-        _ruta.add(_r1);
-        _puntos.removeAt(0);
-        _ruta.add(maps.Polyline(
-          polylineId: const maps.PolylineId("VIAJE*"),
-          points: _puntos,
-          color: Colors.green[900],
-          width: 3,
-        ));
-      } else {
-        _ruta.add(maps.Polyline(
-          polylineId: const maps.PolylineId("VIAJE*"),
-          points: _puntos,
-          color: Colors.green[900],
-          width: 3,
-        ));
-      }
-    } else if (_puntos.isNotEmpty && _puntos.length == 1) {
-      final _r1 =
-          await Direcciones().ruta(_miUbicacion.position, _puntos[0], context);
-      _f.dialogo("r", "rta", context);
-      if (_r1 != null) {
-        _ruta.add(_r1);
-      } else {
-        _ruta.add(maps.Polyline(
-          polylineId: const maps.PolylineId("VIAJE*"),
-          points: _puntos,
-          color: Colors.green[900],
-          width: 3,
-        ));
-      }
-    }*/
   }
 
   Future<void> _centrar_viaje() async {
     if (_destino1 == null && _destino2 == null && _destino3 == null) {
       ///si no hay viajeros en el auto o solicitando viaje, se centra la cámara en la
       ///posicion de condductor
+      await _trazar_ruta();
       await _posicion_camara(17);
       return;
     }
@@ -2287,17 +2224,15 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     return _minimo;
   }
 
-  Future<void> _crear_listener_de_solicitudes() async {
+  Future<void> _crear_listener_de_solicitudes() {
     ///Antes de invocar esta funcion es muy importante que el listener de solicitudes sea nulo
     ///primero hacermos el el path actual y el anterior sean el mismo, no hay que igualar una a otra o haran
     ///referencia a la misma variable, hay que asignarles yn valor desde instancias diferentes
     _path1 = Ciudades(4000).carpeta(widget._pos);
     _path2 = Ciudades(4000).carpeta(widget._pos);
 
-    ///La variable asientos_libres1 se actualiza dentro de la función, asi que solo asignamos el valir retornado
+    ///La variable asientos_libres1 se actualiza dentro de la función, asi que solo asignamos el valor retornado
     _asientos_libres2 = _revisar_asientos_libres();
-
-    print("se renovó el listener de solicitudes");
 
     ///instanciamos el linestener de solicitudes
     _listener_solicitudes = FirebaseFirestore.instance
@@ -2316,7 +2251,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
         ///asientos libres diponibles actuales
         _event.docs.forEach((element) {
           if (element.data()["uid_chofer"] == null &&
-              element.data()["num_pasajeros"] < (_asientos_libres1 + 1)) {
+              element.data()["num_pasajeros"] <= (_asientos_libres1)) {
             ///si todas las condiciones se cumplen agregamos la solicitud a la lista
             Reg_solicitud_viaje _v =
                 Reg_solicitud_viaje.fromJson(element.data());
@@ -2335,7 +2270,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     ///verificar si se esta dentro de una zona con servicio
     if (_path1 == "") {
       if (_listener_solicitudes != null) {
-        _listener_solicitudes.cancel();
+        await _listener_solicitudes.cancel();
         _listener_solicitudes = null;
       }
       return;
@@ -2344,7 +2279,7 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     ///verificar si hay asientos libres
     if (_asientos_libres1 == 0) {
       if (_listener_solicitudes != null) {
-        _listener_solicitudes.cancel();
+        await _listener_solicitudes.cancel();
         _listener_solicitudes = null;
       }
       return;
@@ -2362,11 +2297,11 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     }
 
     if (_listener_solicitudes != null) {
-      _listener_solicitudes.cancel();
+      await _listener_solicitudes.cancel();
       _listener_solicitudes = null;
     }
 
-    await _crear_listener_de_solicitudes();
+    _crear_listener_de_solicitudes();
     return;
   }
 
@@ -2393,13 +2328,20 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
     return (3 - _viajando);
   }
 
-  Future<void> _Crear_listener_de_viaje() {
+  Future<void> _Crear_listener_de_viaje() async {
     if (_listener_viaje != null && !_listener_viaje.isPaused) {
-      return null;
+      return;
     } else if (_listener_viaje != null && _listener_viaje.isPaused) {
       _listener_viaje.resume();
-      return null;
+      return;
     }
+
+    if (!await ConnectionVerify.connectionStatus()) {
+      await _listener_viaje.cancel();
+      _listener_viaje = null;
+      return;
+    }
+
     _listener_viaje = FirebaseFirestore.instance
         .collection("viajes")
         .doc(_miViaje.uid_chofer)
@@ -2491,9 +2433,15 @@ class _Pagina_MapaState extends State<Pagina_Mapa> {
         context);
 
     await _actualizar_marcadores();
-    await _trazar_ruta();
+    await _crear_listener_de_solicitudes();
     await _centrar_viaje();
-    setState(() {});
+    try {
+      setState(() {});
+    } catch (e) {
+      print(
+          "ERROR AL REFRESCAR LA PANTALLA TRAS ELIMINAR UN VIAJERO Y ACTUALIZAR SU MARCADOR");
+    }
+
     return;
   }
 
